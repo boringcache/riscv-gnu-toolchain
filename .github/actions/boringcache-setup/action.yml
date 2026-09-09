@@ -19,6 +19,15 @@ runs:
       run: |
         sudo .github/cleanup-rootfs.sh
         sudo .github/setup-apt.sh
+        curl -fsSL https://github.com/ccache/ccache/releases/download/v4.14/ccache-4.14-linux-x86_64-glibc.tar.gz -o "$RUNNER_TEMP/ccache.tar.gz"
+        echo "c64760b0b85ba86068f4cd162dc42e2dc39c6f46b0cb8c1990dfccbec7a1fed0  $RUNNER_TEMP/ccache.tar.gz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/ccache.tar.gz" -C "$RUNNER_TEMP"
+        curl -fsSL https://github.com/ccache/ccache-storage-http-go/releases/download/v0.9/ccache-storage-http-go-0.9-linux-amd64.tar.gz -o "$RUNNER_TEMP/ccache-http.tar.gz"
+        echo "875dbf6d575d06e4c4492f1ba639beb68530bc23382031a6bacc767cded9f463  $RUNNER_TEMP/ccache-http.tar.gz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/ccache-http.tar.gz" -C "$RUNNER_TEMP"
+        sudo install "$RUNNER_TEMP/ccache-4.14-linux-x86_64-glibc/ccache" /usr/bin/ccache
+        sudo install "$RUNNER_TEMP/ccache-storage-http-go-0.9-linux-amd64/ccache-storage-http" /usr/local/bin/ccache-storage-http
+        ccache --version
         if swapon --noheadings --show=NAME | grep -qx /swapfile; then sudo swapoff /swapfile; fi
         sudo rm -f /swapfile
         sudo fallocate -l 8G /swapfile
