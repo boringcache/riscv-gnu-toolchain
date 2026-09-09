@@ -1,0 +1,52 @@
+name: Prepare LLVM validation
+description: Restore the same source-matched GNU toolchain before measuring LLVM.
+inputs:
+  cache_seed:
+    required: true
+    description: Namespace for this comparison
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        repository: riscv-collab/riscv-gnu-toolchain
+        ref: fb407fa3bb9723ccdf2361f6e36e8410d33e5a7d
+        path: source
+        persist-credentials: false
+    - name: Prepare disk and toolchain prerequisites
+      shell: bash
+      working-directory: source
+      run: |
+        sudo .github/cleanup-rootfs.sh
+        sudo .github/setup-apt.sh
+        if swapon --noheadings --show=NAME | grep -qx /swapfile; then sudo swapoff /swapfile; fi
+        sudo rm -f /swapfile
+        sudo fallocate -l 8G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        sudo mkdir -p /mnt/riscv /mnt/ccache
+        sudo chown -R "$USER:$USER" /mnt/riscv /mnt/ccache
+        echo /usr/lib/ccache >> "$GITHUB_PATH"
+        git submodule update --init --depth 1 llvm binutils
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        repository: riscv-collab/riscv-gnu-toolchain
+        run-id: 33147294209
+        github-token: ${{ github.token }}
+        name: riscv64-glibc-ubuntu-24.04-gcc-build
+        path: ${{ runner.temp }}/gnu
+    - name: Configure LLVM with the retained GNU toolchain
+      shell: bash
+      env:
+        VALIDATION_SEED: ${{ inputs.cache_seed }}
+      run: |
+        tar -xJf "$RUNNER_TEMP/gnu/riscv64-glibc-ubuntu-24.04-gcc-build.tar.xz" -C /mnt
+        test -x /mnt/riscv/bin/riscv64-unknown-linux-gnu-gcc
+        cp operator/.boringcache.toml source/.boringcache.toml
+        cp operator/.github/boringcache-build.sh source/.github/boringcache-build.sh
+        sed -i "s/VALIDATION_SEED/$VALIDATION_SEED/g" source/.boringcache.toml
+        mkdir -p "$RUNNER_TEMP/validation"
+        sha256sum "$RUNNER_TEMP/gnu/"*.tar.xz > "$RUNNER_TEMP/validation/gnu-artifact.txt"
+        cd source
+        ./configure --prefix=/mnt/riscv --with-arch=rv64gc --with-abi=lp64d --enable-llvm

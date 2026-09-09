@@ -1,1 +1,5 @@
 workspace = "boringcache/benchmarks"
+
+[adapters.ccache]
+tag = "riscv-llvm-VALIDATION_SEED"
+fail-on-cache-error = true

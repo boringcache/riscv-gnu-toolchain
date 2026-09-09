@@ -1,0 +1,129 @@
+name: BoringCache LLVM validation
+on:
+  push:
+    branches: [boringcache-validation]
+    paths: [.github/workflows/boringcache-validation.yml]
+  workflow_dispatch:
+    inputs:
+      cli_version:
+        description: Optional exact CLI release override
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: riscv-llvm-validation
+  cancel-in-progress: false
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}/source
+  CCACHE_COMPILERCHECK: content
+  CCACHE_DIR: /mnt/ccache
+  CCACHE_MAXSIZE: 2G
+jobs:
+  cold:
+    name: ${{ matrix.provider }} LLVM cold
+    
+    if: github.repository == 'boringcache/riscv-gnu-toolchain' && github.ref == 'refs/heads/boringcache-validation'
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [GitHub, BoringCache]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: operator
+          persist-credentials: false
+      - uses: ./operator/.github/actions/boringcache-setup
+        with:
+          cache_seed: ${{ github.run_id }}
+      - name: Restore the LLVM ccache namespace
+        if: matrix.provider == 'GitHub'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /mnt/ccache
+          key: riscv-llvm-${{ github.run_id }}
+          fail-on-cache-miss: false
+      - name: Configure native compiler caching
+        if: matrix.provider == 'BoringCache'
+        id: cache
+        uses: boringcache/one@90111526eb218a7f1e119ac2b29f765bd4d82734 # v1.21.0
+        with:
+          mode: ccache
+          working-directory: source
+          cli-version: ${{ inputs.cli_version }}
+          trust-policy: publish
+          fail-on-cache-error: true
+      - name: Build LLVM and verify the RISC-V binary
+        working-directory: source
+        run: bash .github/boringcache-build.sh
+      - name: Save the LLVM ccache namespace
+        if: matrix.provider == 'GitHub'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /mnt/ccache
+          key: riscv-llvm-${{ github.run_id }}
+      - name: Retain compiler and product evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.provider }}-llvm-cold
+          path: |
+            ${{ runner.temp }}/validation
+            ${{ steps.cache.outputs.evidence-path }}
+          retention-days: 14
+  warm:
+    name: ${{ matrix.provider }} LLVM warm
+    needs: cold
+    if: github.repository == 'boringcache/riscv-gnu-toolchain' && github.ref == 'refs/heads/boringcache-validation'
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [GitHub, BoringCache]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: operator
+          persist-credentials: false
+      - uses: ./operator/.github/actions/boringcache-setup
+        with:
+          cache_seed: ${{ github.run_id }}
+      - name: Restore the LLVM ccache namespace
+        if: matrix.provider == 'GitHub'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /mnt/ccache
+          key: riscv-llvm-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Configure native compiler caching
+        if: matrix.provider == 'BoringCache'
+        id: cache
+        uses: boringcache/one@90111526eb218a7f1e119ac2b29f765bd4d82734 # v1.21.0
+        with:
+          mode: ccache
+          working-directory: source
+          cli-version: ${{ inputs.cli_version }}
+          trust-policy: restore
+          fail-on-cache-error: true
+      - name: Build LLVM and verify the RISC-V binary
+        working-directory: source
+        run: bash .github/boringcache-build.sh
+      
+      - name: Retain compiler and product evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.provider }}-llvm-warm
+          path: |
+            ${{ runner.temp }}/validation
+            ${{ steps.cache.outputs.evidence-path }}
+          retention-days: 14
