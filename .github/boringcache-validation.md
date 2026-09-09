@@ -1,8 +1,10 @@
 # RISC-V cache validation
 
+Current workflows pin [One v1.30.0](https://github.com/boringcache/one/releases/tag/v1.30.0) at `a610ec5a564efd9b360925056dbade04deb5def6`. Measurements below are from v1.21.0.
+
 Qualified for shared native compiler caching. All four cold/warm builds passed, with identical compiler hit counts and zero reported cache or backend errors. BoringCache's warm build was slower in this sample; the test did not establish the cause. [Run and artifacts](https://github.com/boringcache/riscv-gnu-toolchain/actions/runs/34321006638) · [Measurements](boringcache-validation.json).
 
-One v1.21.0 is pinned to `90111526eb218a7f1e119ac2b29f765bd4d82734` and uses GitHub OIDC with its native ccache adapter in remote-only mode. The baseline archives a local ccache, limited to 2 GB, with GitHub Actions cache. Warm jobs use fresh runners and restore-only policies.
+The measured runs used One v1.21.0 at `90111526eb218a7f1e119ac2b29f765bd4d82734`, GitHub OIDC and the native ccache adapter in remote-only mode. The baseline archives a local ccache, limited to 2 GB, with GitHub Actions cache. Warm jobs use fresh runners and restore-only policies.
 
 Both providers use PR 1900 source `fb407fa3bb9723ccdf2361f6e36e8410d33e5a7d`, LLVM `ca7933e47d3a3451d81e72ac174dcb5aa28b59d1`, ccache 4.14, HTTP helper 0.9 and Ubuntu 24.04. Source, submodules and the retained GNU artifact hash match across all four jobs. Each job builds and installs LLVM, Clang, Flang, MLIR and runtimes, then compiles and inspects a RISC-V ELF executable with Clang 22.1.8.
 
